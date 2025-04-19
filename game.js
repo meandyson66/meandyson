@@ -7,6 +7,7 @@ let level = 1;
 let money = 100;
 let selectedPlant = null;
 const cellSize = 100;
+const GROWTH_TIME = 1000; // 植物生长时间（毫秒）
 
 // 植物类型
 const availablePlants = [
@@ -51,31 +52,69 @@ function draw() {
     // 清空画布
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    // 绘制背景
+    ctx.fillStyle = '#f0f0f0';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 绘制顶部菜单背景
+    ctx.fillStyle = '#4CAF50';
+    ctx.fillRect(0, 0, canvas.width, 50);
+
+    // 绘制种植区域网格
+    for (let i = 0; i < 8; i++) {
+        for (let j = 0; j < 5; j++) {
+            // 绘制网格背景
+            ctx.fillStyle = '#e8f5e9';
+            ctx.fillRect(i * cellSize, j * cellSize + 100, cellSize, cellSize);
+            // 绘制网格线
+            ctx.strokeStyle = '#81c784';
+            ctx.strokeRect(i * cellSize, j * cellSize + 100, cellSize, cellSize);
+        }
+    }
+
     // 绘制植物
     plants.forEach(plant => {
         const img = plantImages[plant.name];
         if (img) {
-            ctx.drawImage(img, plant.x * cellSize, plant.y * cellSize + 100, cellSize - 10, cellSize - 10);
+            ctx.drawImage(img, plant.x * cellSize + 5, plant.y * cellSize + 105, cellSize - 10, cellSize - 10);
         }
     });
 
     // 绘制顶部菜单
     availablePlants.forEach((plant, index) => {
+        // 绘制按钮背景
+        ctx.fillStyle = money >= plant.cost && level >= plant.levelRequired ? '#66BB6A' : '#A5D6A7';
+        ctx.fillRect(index * 100, 0, 100, 50);
+        ctx.strokeStyle = '#2E7D32';
+        ctx.strokeRect(index * 100, 0, 100, 50);
+
         const img = plantImages[plant.name];
         if (img) {
-            ctx.drawImage(img, index * 100 + 30, 25, 30, 30);
+            ctx.drawImage(img, index * 100 + 30, 10, 30, 30);
             ctx.fillStyle = 'white';
-            ctx.fillText(`$${plant.cost}`, index * 100 + 70, 25);
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(`$${plant.cost}`, index * 100 + 70, 30);
         }
     });
 
     // 绘制等级进度条
     const levelProgress = (money % (level * 100)) / (level * 100);
-    drawProgressBar(10, 550, 200, 20, levelProgress, 'green');
+    drawProgressBar(10, 550, 200, 20, levelProgress, '#4CAF50');
 
     // 绘制金钱显示
     ctx.fillStyle = 'black';
+    ctx.font = '16px Arial';
+    ctx.textAlign = 'right';
     ctx.fillText(`金钱: $${money}`, 790, 590);
+
+    // 如果选择了植物，显示提示
+    if (selectedPlant) {
+        ctx.fillStyle = 'black';
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(`已选择: ${selectedPlant.name}`, 400, 580);
+    }
 }
 
 // 绘制进度条
@@ -132,15 +171,49 @@ function canPlantAt(x, y) {
 // 种植植物
 function plant(x, y) {
     if (selectedPlant && money >= selectedPlant.cost) {
-        plants.push({ name: selectedPlant.name, x, y });
+        plants.push({
+            name: selectedPlant.name,
+            x,
+            y,
+            plantTime: Date.now(),
+            reward: selectedPlant.reward
+        });
         money -= selectedPlant.cost;
     }
 }
 
-// 游戏循环
+// 添加更新函数
+function update() {
+    const now = Date.now();
+    const plantsToHarvest = [];
+
+    // 检查植物是否可以收获
+    plants.forEach((plant, index) => {
+        if (now - plant.plantTime >= GROWTH_TIME) {
+            plantsToHarvest.push(index);
+        }
+    });
+
+    // 从后往前收获植物，以避免数组索引问题
+    for (let i = plantsToHarvest.length - 1; i >= 0; i--) {
+        const index = plantsToHarvest[i];
+        const plant = plants[index];
+        money += plant.reward;
+        plants.splice(index, 1);
+        
+        // 检查是否升级
+        if (money >= level * 100) {
+            level++;
+            console.log(`升级到 ${level} 级！`);
+        }
+    }
+}
+
+// 修改游戏循环
 function gameLoop() {
+    update();
     draw();
-    saveGameData(); // 每帧保存游戏数据
+    saveGameData();
     requestAnimationFrame(gameLoop);
 }
 
