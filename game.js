@@ -1,222 +1,269 @@
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+import pygame
+import os
+import math
+from plants import Plant, PlantType
 
-// 游戏状态
-let plants = [];
-let level = 1;
-let money = 100;
-let selectedPlant = null;
-const cellSize = 100;
-const GROWTH_TIME = 1000; // 植物生长时间（毫秒）
-
-// 植物类型
-const availablePlants = [
-    { name: '胡萝卜', cost: 10, reward: 20, levelRequired: 1, imagePath: 'assets/carrot.png.png' },
-    { name: '白菜', cost: 15, reward: 30, levelRequired: 2, imagePath: 'assets/cabbage.png.png' },
-    { name: '草莓', cost: 20, reward: 40, levelRequired: 3, imagePath: 'assets/strawberry.png.png' },
-    { name: '西瓜', cost: 30, reward: 60, levelRequired: 4, imagePath: 'assets/watermelon.png.png' }
-];
-
-// 加载植物图片
-const plantImages = {};
-availablePlants.forEach(plant => {
-    const img = new Image();
-    img.src = plant.imagePath;
-    plantImages[plant.name] = img;
-});
-
-// 加载游戏数据
-function loadGameData() {
-    const savedData = localStorage.getItem('gameData');
-    if (savedData) {
-        const data = JSON.parse(savedData);
-        plants = data.plants || [];
-        level = data.level || 1;
-        money = data.money || 100;
-        selectedPlant = null;
-    }
-}
-
-// 保存游戏数据
-function saveGameData() {
-    const gameData = {
-        plants,
-        level,
-        money
-    };
-    localStorage.setItem('gameData', JSON.stringify(gameData));
-}
-
-// 绘制游戏
-function draw() {
-    // 清空画布
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // 绘制背景
-    ctx.fillStyle = '#f0f0f0';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // 绘制顶部菜单背景
-    ctx.fillStyle = '#4CAF50';
-    ctx.fillRect(0, 0, canvas.width, 50);
-
-    // 绘制种植区域网格
-    for (let i = 0; i < 8; i++) {
-        for (let j = 0; j < 5; j++) {
-            // 绘制网格背景
-            ctx.fillStyle = '#e8f5e9';
-            ctx.fillRect(i * cellSize, j * cellSize + 100, cellSize, cellSize);
-            // 绘制网格线
-            ctx.strokeStyle = '#81c784';
-            ctx.strokeRect(i * cellSize, j * cellSize + 100, cellSize, cellSize);
-        }
-    }
-
-    // 绘制植物
-    plants.forEach(plant => {
-        const img = plantImages[plant.name];
-        if (img) {
-            ctx.drawImage(img, plant.x * cellSize + 5, plant.y * cellSize + 105, cellSize - 10, cellSize - 10);
-        }
-    });
-
-    // 绘制顶部菜单
-    availablePlants.forEach((plant, index) => {
-        // 绘制按钮背景
-        ctx.fillStyle = money >= plant.cost && level >= plant.levelRequired ? '#66BB6A' : '#A5D6A7';
-        ctx.fillRect(index * 100, 0, 100, 50);
-        ctx.strokeStyle = '#2E7D32';
-        ctx.strokeRect(index * 100, 0, 100, 50);
-
-        const img = plantImages[plant.name];
-        if (img) {
-            ctx.drawImage(img, index * 100 + 30, 10, 30, 30);
-            ctx.fillStyle = 'white';
-            ctx.font = '14px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText(`$${plant.cost}`, index * 100 + 70, 30);
-        }
-    });
-
-    // 绘制等级进度条
-    const levelProgress = (money % (level * 100)) / (level * 100);
-    drawProgressBar(10, 550, 200, 20, levelProgress, '#4CAF50');
-
-    // 绘制金钱显示
-    ctx.fillStyle = 'black';
-    ctx.font = '16px Arial';
-    ctx.textAlign = 'right';
-    ctx.fillText(`金钱: $${money}`, 790, 590);
-
-    // 如果选择了植物，显示提示
-    if (selectedPlant) {
-        ctx.fillStyle = 'black';
-        ctx.font = '16px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(`已选择: ${selectedPlant.name}`, 400, 580);
-    }
-}
-
-// 绘制进度条
-function drawProgressBar(x, y, width, height, progress, color) {
-    // 绘制背景
-    ctx.fillStyle = 'lightgray';
-    ctx.fillRect(x, y, width, height);
-
-    // 绘制进度
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y, width * progress, height);
-
-    // 绘制等级和进度文字
-    ctx.fillStyle = 'black';
-    ctx.fillText(`等级 ${level}`, x + 40, y + height / 2);
-    ctx.fillText(`${Math.floor(progress * 100)}%`, x + width - 30, y + height / 2);
-}
-
-// 处理点击事件
-canvas.addEventListener('click', (event) => {
-    const rect = canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-
-    // 检查是否点击了植物选择区域
-    if (y < 50) {
-        const plantIndex = Math.floor(x / 100);
-        if (plantIndex < availablePlants.length) {
-            const plant = availablePlants[plantIndex];
-            if (money >= plant.cost && plant.levelRequired <= level) {
-                selectedPlant = plant;
-                console.log(`选择了植物: ${plant.name}`);
-            }
-        }
-    }
-    // 检查是否点击了种植区域
-    else if (y > 100) {
-        if (selectedPlant) {
-            const gridX = Math.floor(x / 100);
-            const gridY = Math.floor((y - 100) / 100);
-            if (canPlantAt(gridX, gridY)) {
-                console.log(`在位置 (${gridX}, ${gridY}) 种植了 ${selectedPlant.name}`);
-                plant(gridX, gridY);
-            }
-        }
-    }
-});
-
-// 检查是否可以种植
-function canPlantAt(x, y) {
-    return !plants.some(plant => plant.x === x && plant.y === y);
-}
-
-// 种植植物
-function plant(x, y) {
-    if (selectedPlant && money >= selectedPlant.cost) {
-        plants.push({
-            name: selectedPlant.name,
-            x,
-            y,
-            plantTime: Date.now(),
-            reward: selectedPlant.reward
-        });
-        money -= selectedPlant.cost;
-    }
-}
-
-// 添加更新函数
-function update() {
-    const now = Date.now();
-    const plantsToHarvest = [];
-
-    // 检查植物是否可以收获
-    plants.forEach((plant, index) => {
-        if (now - plant.plantTime >= GROWTH_TIME) {
-            plantsToHarvest.push(index);
-        }
-    });
-
-    // 从后往前收获植物，以避免数组索引问题
-    for (let i = plantsToHarvest.length - 1; i >= 0; i--) {
-        const index = plantsToHarvest[i];
-        const plant = plants[index];
-        money += plant.reward;
-        plants.splice(index, 1);
+class Game:
+    def __init__(self, screen):
+        self.screen = screen
+        self.plants = []
+        self.level = 1
+        self.money = 100
+        self.selected_plant = None
+        self.cell_size = 100  # 添加网格单元格大小
         
-        // 检查是否升级
-        if (money >= level * 100) {
-            level++;
-            console.log(`升级到 ${level} 级！`);
+        # 尝试加载系统字体
+        try:
+            # Windows系统字体
+            if os.name == 'nt':
+                self.font = pygame.font.SysFont('microsoft yahei', 24)
+                self.small_font = pygame.font.SysFont('microsoft yahei', 18)
+            else:
+                self.font = pygame.font.SysFont('arial', 24)
+                self.small_font = pygame.font.SysFont('arial', 18)
+        except:
+            # 如果系统字体加载失败，使用默认字体
+            self.font = pygame.font.Font(None, 24)
+            self.small_font = pygame.font.Font(None, 18)
+        
+        # 定义颜色
+        self.colors = {
+            'background': (240, 240, 240),
+            'grid': (200, 230, 200),
+            'grid_line': (180, 210, 180),
+            'button': (100, 200, 100),
+            'button_hover': (120, 220, 120),
+            'button_disabled': (200, 200, 200),
+            'text': (0, 0, 0),
+            'text_light': (255, 255, 255),
+            'level_bar': (100, 200, 100),
+            'money_bar': (255, 215, 0)
         }
-    }
-}
-
-// 修改游戏循环
-function gameLoop() {
-    update();
-    draw();
-    saveGameData();
-    requestAnimationFrame(gameLoop);
-}
-
-// 在游戏启动时加载数据
-loadGameData();
-gameLoop(); 
+        
+        # 初始化可种植的植物
+        self.available_plants = [
+            PlantType("胡萝卜", 10, 20, 1, 5, "assets/carrot.png.png"),
+            PlantType("白菜", 15, 30, 2, 8, "assets/cabbage.png.png"),
+            PlantType("草莓", 20, 40, 3, 12, "assets/strawberry.png.png"),
+            PlantType("西瓜", 30, 60, 4, 20, "assets/watermelon.png.png")
+        ]
+        
+        # 创建渐变背景
+        self.background = pygame.Surface((800, 600))
+        for y in range(600):
+            color = (240 - y//4, 240 - y//4, 240 - y//4)
+            pygame.draw.line(self.background, color, (0, y), (800, y))
+        
+        # 加载植物图片
+        self.plant_images = {}
+        for plant_type in self.available_plants:
+            try:
+                image_path = plant_type.image_path
+                print(f"尝试加载图片: {image_path}")
+                if os.path.exists(image_path):
+                    image = pygame.image.load(image_path).convert_alpha()
+                    # 调整图片大小
+                    image = pygame.transform.scale(image, (self.cell_size - 10, self.cell_size - 10))
+                    self.plant_images[plant_type.name] = image
+                    print(f"成功加载图片: {plant_type.name}")
+                else:
+                    print(f"图片文件不存在: {image_path}")
+                    self.plant_images[plant_type.name] = None
+            except Exception as e:
+                print(f"加载图片时出错: {e}")
+                self.plant_images[plant_type.name] = None
+        
+        print("游戏初始化完成")
+    
+    def draw_button(self, x, y, width, height, text, enabled=True, hover=False, image=None):
+        # 绘制按钮背景
+        color = self.colors['button']
+        if not enabled:
+            color = self.colors['button_disabled']
+        elif hover:
+            color = self.colors['button_hover']
+        
+        pygame.draw.rect(self.screen, color, (x, y, width, height), border_radius=10)
+        pygame.draw.rect(self.screen, (0, 0, 0), (x, y, width, height), 2, border_radius=10)
+        
+        # 如果有图片，绘制图片
+        if image:
+            # 调整图片大小
+            img_size = min(width - 20, height - 20)
+            image = pygame.transform.scale(image, (img_size, img_size))
+            # 居中显示图片
+            img_rect = image.get_rect(center=(x + width//2, y + height//2 - 10))
+            self.screen.blit(image, img_rect)
+        
+        # 绘制文字
+        text_surface = self.font.render(text, True, self.colors['text_light'] if enabled else self.colors['text'])
+        text_rect = text_surface.get_rect(center=(x + width//2, y + height - 15))
+        self.screen.blit(text_surface, text_rect)
+    
+    def draw_progress_bar(self, x, y, width, height, progress, color):
+        # 绘制进度条背景（带立体效果）
+        # 绘制阴影
+        pygame.draw.rect(self.screen, (180, 180, 180), (x + 2, y + 2, width, height), border_radius=5)
+        # 绘制背景
+        pygame.draw.rect(self.screen, (200, 200, 200), (x, y, width, height), border_radius=5)
+        # 绘制边框
+        pygame.draw.rect(self.screen, (0, 0, 0), (x, y, width, height), 1, border_radius=5)
+        
+        # 绘制进度（带渐变色效果）
+        if progress > 0:
+            progress_width = int(width * progress)
+            
+            # 创建渐变色表面
+            gradient_surface = pygame.Surface((progress_width, height))
+            for i in range(progress_width):
+                # 计算当前位置的颜色
+                ratio = i / progress_width
+                # 从深色到浅色的渐变
+                r = int(color[0] * (0.7 + 0.3 * ratio))
+                g = int(color[1] * (0.7 + 0.3 * ratio))
+                b = int(color[2] * (0.7 + 0.3 * ratio))
+                # 绘制垂直线
+                pygame.draw.line(gradient_surface, (r, g, b), (i, 0), (i, height))
+            
+            # 添加高光效果
+            highlight_surface = pygame.Surface((progress_width, height//3), pygame.SRCALPHA)
+            for i in range(progress_width):
+                alpha = int(100 * (1 - i / progress_width))
+                pygame.draw.line(highlight_surface, (255, 255, 255, alpha), (i, 0), (i, height//3))
+            
+            # 绘制进度条
+            gradient_surface.set_colorkey((0, 0, 0))
+            self.screen.blit(gradient_surface, (x, y))
+            self.screen.blit(highlight_surface, (x, y))
+            
+            # 添加等级和进度文字（分开显示）
+            level_text = f"等级 {self.level}"
+            progress_text = f"{int(progress * 100)}%"
+            
+            # 绘制等级文字（靠左）
+            level_surface = self.small_font.render(level_text, True, (0, 0, 0))
+            level_rect = level_surface.get_rect(center=(x + 40, y + height//2))
+            self.screen.blit(level_surface, level_rect)
+            
+            # 绘制进度文字（靠右）
+            progress_surface = self.small_font.render(progress_text, True, (0, 0, 0))
+            progress_rect = progress_surface.get_rect(center=(x + width - 30, y + height//2))
+            self.screen.blit(progress_surface, progress_rect)
+    
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == 1:  # 左键点击
+                mouse_pos = pygame.mouse.get_pos()
+                self.handle_click(mouse_pos)
+    
+    def handle_click(self, pos):
+        x, y = pos
+        # 检查是否点击了植物选择区域
+        if y < 50:  # 顶部菜单区域
+            plant_index = x // 100
+            if plant_index < len(self.available_plants):
+                plant_type = self.available_plants[plant_index]
+                if self.money >= plant_type.cost and plant_type.level_required <= self.level:
+                    self.selected_plant = plant_type
+                    print(f"选择了植物: {plant_type.name}")
+        
+        # 检查是否点击了种植区域
+        elif y > 100:  # 种植区域
+            if self.selected_plant:
+                grid_x = x // 100
+                grid_y = (y - 100) // 100
+                if self.can_plant_at(grid_x, grid_y):
+                    print(f"在位置 ({grid_x}, {grid_y}) 种植了 {self.selected_plant.name}")
+                    self.plant(grid_x, grid_y)
+    
+    def can_plant_at(self, x, y):
+        for plant in self.plants:
+            if plant.x == x and plant.y == y:
+                return False
+        return True
+    
+    def plant(self, x, y):
+        if self.selected_plant and self.money >= self.selected_plant.cost:
+            self.plants.append(Plant(self.selected_plant, x, y))
+            self.money -= self.selected_plant.cost
+    
+    def update(self):
+        for plant in self.plants:
+            plant.update()
+            if plant.is_ready_to_harvest():
+                self.money += plant.type.reward
+                self.plants.remove(plant)
+                print(f"收获植物，获得 {plant.type.reward} 金钱")
+                # 检查是否升级
+                if self.money >= self.level * 100:
+                    self.level += 1
+                    print(f"升级到 {self.level} 级")
+    
+    def draw(self):
+        try:
+            # 绘制渐变背景
+            self.screen.blit(self.background, (0, 0))
+            
+            # 绘制顶部菜单
+            for i, plant_type in enumerate(self.available_plants):
+                # 检查鼠标是否悬停在按钮上
+                mouse_pos = pygame.mouse.get_pos()
+                hover = (i * 100 <= mouse_pos[0] < (i + 1) * 100 and 0 <= mouse_pos[1] < 50)
+                
+                # 检查按钮是否可用
+                enabled = (self.money >= plant_type.cost and plant_type.level_required <= self.level)
+                
+                # 绘制按钮背景
+                color = self.colors['button']
+                if not enabled:
+                    color = self.colors['button_disabled']
+                elif hover:
+                    color = self.colors['button_hover']
+                
+                pygame.draw.rect(self.screen, color, (i * 100, 0, 100, 50), border_radius=10)
+                pygame.draw.rect(self.screen, (0, 0, 0), (i * 100, 0, 100, 50), 2, border_radius=10)
+                
+                # 绘制植物图片和价格（并排显示）
+                if self.plant_images[plant_type.name]:
+                    img_size = 30
+                    image = pygame.transform.scale(self.plant_images[plant_type.name], (img_size, img_size))
+                    # 图片靠左
+                    img_rect = image.get_rect(center=(i * 100 + 30, 25))
+                    self.screen.blit(image, img_rect)
+                    
+                    # 价格靠右
+                    text_surface = self.small_font.render(f"${plant_type.cost}", True, self.colors['text_light'] if enabled else self.colors['text'])
+                    text_rect = text_surface.get_rect(center=(i * 100 + 70, 25))
+                    self.screen.blit(text_surface, text_rect)
+            
+            # 绘制种植区域
+            for i in range(8):
+                for j in range(5):
+                    # 绘制网格背景
+                    pygame.draw.rect(self.screen, self.colors['grid'], 
+                                   (i * 100, j * 100 + 100, 100, 100))
+                    # 绘制网格线
+                    pygame.draw.rect(self.screen, self.colors['grid_line'], 
+                                   (i * 100, j * 100 + 100, 100, 100), 1)
+            
+            # 绘制植物
+            for plant in self.plants:
+                plant.draw(self.screen)
+            
+            # 绘制游戏信息
+            # 等级进度条
+            level_progress = (self.money % (self.level * 100)) / (self.level * 100)
+            self.draw_progress_bar(10, 550, 200, 20, level_progress, self.colors['level_bar'])
+            
+            # 金钱显示（右下角，使用小字体）
+            money_text = self.small_font.render(f"金钱: ${self.money}", True, self.colors['text'])
+            money_rect = money_text.get_rect(bottomright=(790, 590))
+            self.screen.blit(money_text, money_rect)
+            
+            # 如果选择了植物，显示提示
+            if self.selected_plant:
+                hint_text = self.small_font.render(f"已选择: {self.selected_plant.name}", True, self.colors['text'])
+                self.screen.blit(hint_text, (400, 530))
+        except Exception as e:
+            print(f"绘制时出错: {e}")
+            raise 
