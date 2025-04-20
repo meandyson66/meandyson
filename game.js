@@ -39,8 +39,8 @@ const availablePlants = [
 // 音效路径配置
 const soundEffects = {
     plant: 'assets/plant.mp3',
-    harvest: 'assets/coin.wav',
-    levelUp: 'assets/levelup.wav',
+    harvest: 'assets/coin.mp3',
+    levelUp: 'assets/levelup.mp3',
     error: 'assets/error.mp3'
 };
 
@@ -568,4 +568,4 @@ window.showError = function(message) {
         document.getElementById('loadingMessage').style.display = 'none';
     }
     console.error(message);
-}; 
+};
